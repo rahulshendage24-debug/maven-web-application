@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: java-container
-        image: rahulshendage/java-app:version1  # Aapki Docker Hub image
+        image: rahulshendage/java-app:version1
         imagePullPolicy: Always           # Taaki har baar naya code download ho
         ports:
         - containerPort: 8080             # Java apps aksar 8080 par chalti hain (check karei
