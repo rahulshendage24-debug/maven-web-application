@@ -1,75 +1,63 @@
 pipeline{
+    agent any
+    stages{
+        stage('code pull'){
+            steps{
+              git url: "https://github.com/rahulshendage24-debug/maven-web-application.git"
+              echo "sucessfull pulled the code"
+            }
+        }
+        stage('build with maven'){
+            steps{
+              sh "mvn clean package"
+            }
+        }
+        stage('test'){
+            steps{
+              sh "mvn test"
+            }
+        }
+                stage('build with the docker') {
+            steps {
+                // This securely injects your credentials into the shell script environment
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        # Clean up existing containers running on port 8081 safely
+                        RUNNING=$(docker ps -q --filter "publish=8081")
+                        if [ ! -z "$RUNNING" ]; then 
+                            docker stop $RUNNING || true
+                        fi
+                        
+                        ALL_CONTAINERS=$(docker ps -aq --filter "publish=8081")
+                        if [ ! -z "$ALL_CONTAINERS" ]; then 
+                            docker rm $ALL_CONTAINERS || true
+                        fi
+                        
+                        docker rm -f my-web-app || true
+                        
+                        # Build the image using your exact verified repository path
+                        docker build -t rahulshendage/java-app:version1 .
+                        
+                        # LOG IN TO DOCKER HUB FIRST
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        
+                        # PUSH THE IMAGE (This will now succeed)
+                        docker push rahulshendage/java-app:version1
+                        
+                        # Clean up local cache
+                        docker image prune -f
+                    '''
+                }
+            }
+        }
 
-agent any
-
-tools{
-maven 'maven3.8.2'
-
+        stage('deploy with kubernatives'){
+            steps{
+                 sh '''
+                  kubectl apply -f deployment.yml
+                  kubectl apply -f service.yml
+                 '''
+            }
+        }
+    }
 }
-
-triggers{
-pollSCM('* * * * *')
-}
-
-options{
-timestamps()
-buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '5', daysToKeepStr: '', numToKeepStr: '5'))
-}
-
-stages{
-
-  stage('CheckOutCode'){
-    steps{
-    git branch: 'development', credentialsId: '957b543e-6f77-4cef-9aec-82e9b0230975', url: 'https://github.com/devopstrainingblr/maven-web-application-1.git'
-	
-	}
-  }
-  
-  stage('Build'){
-  steps{
-  sh  "mvn clean package"
-  }
-  }
-/*
- stage('ExecuteSonarQubeReport'){
-  steps{
-  sh  "mvn clean sonar:sonar"
-  }
-  }
-  
-  stage('UploadArtifactsIntoNexus'){
-  steps{
-  sh  "mvn clean deploy"
-  }
-  }
-  
-  stage('DeployAppIntoTomcat'){
-  steps{
-  sshagent(['bfe1b3c1-c29b-4a4d-b97a-c068b7748cd0']) {
-   sh "scp -o StrictHostKeyChecking=no target/maven-web-application.war ec2-user@35.154.190.162:/opt/apache-tomcat-9.0.50/webapps/"    
-  }
-  }
-  }
-  */
-}//Stages Closing
-
-post{
-
- success{
- emailext to: 'devopstrainingblr@gmail.com,mithuntechnologies@yahoo.com',
-          subject: "Pipeline Build is over .. Build # is ..${env.BUILD_NUMBER} and Build status is.. ${currentBuild.result}.",
-          body: "Pipeline Build is over .. Build # is ..${env.BUILD_NUMBER} and Build status is.. ${currentBuild.result}.",
-          replyTo: 'devopstrainingblr@gmail.com'
- }
- 
- failure{
- emailext to: 'devopstrainingblr@gmail.com,mithuntechnologies@yahoo.com',
-          subject: "Pipeline Build is over .. Build # is ..${env.BUILD_NUMBER} and Build status is.. ${currentBuild.result}.",
-          body: "Pipeline Build is over .. Build # is ..${env.BUILD_NUMBER} and Build status is.. ${currentBuild.result}.",
-          replyTo: 'devopstrainingblr@gmail.com'
- }
- 
-}
-
-
-}//Pipeline closing
